@@ -9,4 +9,6 @@ def get_response(user_input: str) -> str:
         return 'Emoji này gợi nhớ mị lúc Nep gay thật...giờ vẫn thế' 
     if lowered == 'soi': 
         return ':fire:'
+    if lowered == 'hmm gay':
+        return ':gay'
 
