@@ -7,10 +7,9 @@ def get_response(user_input: str) -> str:
         return 'The gay one ?'
     elif lowered == '<:noinho:1247579809647693826>':
         return 'Is that nep gay ?'
-
-    if lowered == 'soi': 
+    elif lowered == 'soi': 
         return ':fire:'
-    if lowered == 'hmm gay':
-        return ':gay:'
+    elif lowered == 'hmm gay':
+        return '<:gay:1129023233522409613>'
 
 
