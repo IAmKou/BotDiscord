@@ -10,5 +10,5 @@ def get_response(user_input: str) -> str:
     if lowered == 'soi': 
         return ':fire:'
     if lowered == 'hmm gay':
-        return ':gay'
+        return ':gay:'
 
