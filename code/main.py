@@ -1,7 +1,9 @@
 import os
 import json
+import io
+import requests
 from dotenv import load_dotenv
-from discord import Intents, Client, Message
+from discord import Intents, Client, Message, File
 from difflib import get_close_matches
 
 # Load token from environment
@@ -36,7 +38,7 @@ def find_best_match(user_input: str, questions: list[str]) -> str | None:
     matches = get_close_matches(user_input, questions, n=1, cutoff=0.6)
     return matches[0] if matches else None
 
-def get_answer_for_question(question: str, knowledge: dict) -> str | None:
+def get_answer_for_question(question: str, knowledge: dict) -> str | dict | None:
     for q in knowledge["questions"]:
         if q["question"].lower() == question.lower():
             return q["answer"]
@@ -48,21 +50,34 @@ async def get_response(user_message: str) -> str:
 
     if best_match:
         answer = get_answer_for_question(best_match, knowledge)
-        return answer
-    else:
-        return "Faust doesn't know this yet. Can you teach me?"
+        if isinstance(answer, str):
+            return answer
+        elif isinstance(answer, dict) and answer.get("type") == "image":
+            return answer["url"]
+    return "Faust doesn't know this yet. Can you teach me?"
 
 async def collect_new_answer(message: Message, user_message: str) -> None:
     def check(m):
         return m.author == message.author and m.channel == message.channel
 
-    await message.channel.send("Please type the answer or 'skip' to skip:")
+    await message.channel.send("Please type the answer or 'skip' to skip (provide image URL for image answers):")
     answer_message = await client.wait_for('message', check=check)
     new_answer = answer_message.content
 
     if new_answer.lower() != 'skip':
+        if new_answer.startswith('http') and (new_answer.endswith('.jpg') or new_answer.endswith('.png') or new_answer.endswith('.gif')):
+            answer_data = {
+                "type": "image",
+                "url": new_answer
+            }
+        elif "<@" in new_answer or "@everyone" in new_answer or "@here" in new_answer:
+            await message.channel.send("Faust doesn't accept answers that ping users or roles. Please provide another answer.")
+            return await collect_new_answer(message, user_message)
+        else:
+            answer_data = new_answer
+
         knowledge = load_knowledge('knowledge.json')
-        knowledge["questions"].append({"question": user_message, "answer": new_answer})
+        knowledge["questions"].append({"question": user_message, "answer": answer_data})
         save_knowledge('knowledge.json', knowledge)
         await message.channel.send('Thank you for your information')
 
@@ -84,10 +99,22 @@ async def send_message(message: Message, user_message: str) -> None:
 
     try:
         response = await get_response(user_message)
-        await message.channel.send(response)
+        if response.startswith('http') and (response.endswith('.jpg') or response.endswith('.png') or response.endswith('.gif')):
+            async with requests.get(response) as image_response:
+                image_response.raise_for_status()
+                image_data = await image_response.read()
+                await message.channel.send(file=File(io.BytesIO(image_data), filename="downloaded_image.jpg"))
+        else:
+            await message.channel.send(response)
         
         if response == "Faust doesn't know this yet. Can you teach me?":
             await collect_new_answer(message, user_message)
+    except requests.exceptions.RequestException as e:
+        print(f"Request Exception: {e}")
+        await message.channel.send(f"Error retrieving image: {e}")
+    except IOError as e:
+        print(f"IOError: {e}")
+        await message.channel.send(f"Error reading image data: {e}")
     except Exception as e:
         print(f"Error handling message: {e}")
 
